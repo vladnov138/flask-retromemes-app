@@ -1,42 +1,112 @@
-from flask import Flask
-from flask import redirect
-from flask import render_template
-from os import getcwd
+from flask import Flask, flash, request, redirect, url_for, session, render_template
+from werkzeug.utils import secure_filename
+import os
+import sqlite3 as sl
+import sys
+from modules.dummies import generate_dummypage
+from modules.database import *
+
+# from modules.database import get_table_column, create_connection
 
 app = Flask(__name__, template_folder='templates')
 
 CURRENT_ADDRESS = "http://127.0.0.1:5000/"
+DATABASE_PATH = os.getcwd() + '\\' + "database" + '\\' + "memes.db"
+UPLOAD_FOLDER = os.getcwd() + '\\' + "static\\images\\uploaded_memes\\"
+DEFAULT_AVATAR = os.getcwd() + "\\static\\images\\ava.png"
+
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['SECRET_KEY'] = 'a03cb5d6aa4399201f230dedcbbb3ed8bec0018d19db9521415b547a'
 
 
-#The page for meme uploading
-@app.route("/uploads",methods=['GET','POST'])
+def allowed_file(filename):
+	return '.' in filename and \
+		   filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+# The page for meme uploading
+@app.route("/uploads", methods=['GET', 'POST'])
 @app.route("/upload", methods=['GET', 'POST'])
 def upload_meme():
+	if 'login' not in session:
+		return redirect(url_for('login_user'))
+	if request.method == 'POST':
+		# check if the post request has the file part
+		if 'file' in request.files:
+			print("THERE IZ DA FILE! ", file=sys.stdout)
+			file = request.files['file']
+			if file.filename != '' and allowed_file(file.filename):
+				filename = secure_filename(file.filename)
+				print(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+				file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+				return redirect(url_for('show_feed'))
 	return render_template('upload.html')
 
-#The feed page
-@app.route("/feed", methods=['GET', 'POST'])
-def show_feed():
-	return "<h1>Welcome to da feed page!</h1>"
 
-#Handling of 404 error
+# The feed page
+@app.route('/')
+@app.route("/feed", methods=['GET', 'POST'])
+@app.route("/index", methods=['GET', 'POST'])
+@app.route("/main", methods=['GET', 'POST'])
+def show_feed():
+	return render_template("index.html")
+
+
+# Handling of 404 error
 @app.errorhandler(404)
 def page_notexist(e):
 	return render_template('404.html')
 
-#Register page
+
+# Register page
 @app.route("/register", methods=['POST', 'GET'])
 @app.route("/signup", methods=['POST', 'GET'])
 def register_user():
-	return "<h2>Welcome to register page!</h2>"
+	if 'login' in session:
+		return redirect(url_for('show_feed'))
+	if request.method == 'POST':
+		login = request.form.get('login')
+		password = request.form.get('password')
+		#email = request.form.get('email')
+		file = ''
+		if 'file' in request.files:
+			file = request.files['file']
+		path = ''
+		if file == '':
+			path = DEFAULT_AVATAR
+		elif allowed_file(file.filename):
+			filename = secure_filename(file.filename)
+			path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+			file.save(path)
+		con = sl.connect(DATABASE_PATH)
+		email = f"user_email_{login}{path}@mail.ru"
+		val = add_data(connection=con, tablename='users', dataclass_element=User(0, 0, login, password, path, email), individual_fields=USERS_INDIVIDUAL_FIELDS)
+		session['login'] = login
+	return render_template('register.html')
 
-#Login page
+
+# Login page
 @app.route("/login", methods=['POST', 'GET'])
 @app.route("/auth", methods=['POST', 'GET'])
 @app.route("/authorize", methods=['POST', 'GET'])
 def login_user():
-	return "<h2> Welcome to the  login page </h2>"
+	if 'login' in session:
+		del session['login']  # TODO delete that later
+		return redirect(url_for('show_feed'))
+	if request.method == 'POST':
+		login = request.form.get('login')
+		password = request.form.get('password')
+		con = sl.connect(DATABASE_PATH)
+		sql = f"SELECT password,id FROM users WHERE `login`='{login}'"
+		result = list(con.execute(sql))
+		if password == result[0][0]:
+			session['login'] = login
+			session['id'] = result[0][1]
+	return render_template('auth.html')
 
-#Programm run
-if __name__=='__main__':
+
+# Programm run
+if __name__ == '__main__':
 	app.run(host="0.0.0.0")
