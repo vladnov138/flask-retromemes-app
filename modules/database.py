@@ -230,6 +230,12 @@ def get_username_bId(user_id, db_file):
     result = connection.execute(sql_querry).fetchall()[0][0]
     return result
 
+def get_user_avatar_bId(user_id, db_file):
+    connection = create_connection(db_file)
+    sql_query = f"SELECT avatar FROM users WHERE id={user_id}"
+    result = connection.execute(sql_query).fetchall()[0][0]
+    return result
+
     
 def delete_post_bID(post_id, connection, basic_path):
     """Delete post by it's id"""
@@ -278,7 +284,6 @@ def synthesize_admin(connection, admin_name, isAdmin = 1):
     add_user(connection, user)
     connection.commit()
 
-
 def synthesize_user(connection, user_name):
     """Synthesizes user"""
     synthesize_admin(connection, user_name, 0)
@@ -307,3 +312,12 @@ def create_testdata_database(db_file_path, memes_folder_path):
     connection.commit()
     print("\n\n Experimental data was successfully added!")
     print_database(db_file_path)
+
+    
+def get_dataclass_bId(connection, table_name, id):
+    """Parses database row with id=id as dataclass object. If something goes wrong returns None"""
+    if table_name in USED_TABLES:
+        sql_querry = f"SELECT * from {table_name} where id={id}"
+        result = connection.execute(sql_querry).fetchall()[0]
+        return _process_table_rowdata(table_name, result)
+    return None   
